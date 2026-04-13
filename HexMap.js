@@ -1486,42 +1486,52 @@
         return { config: configRes.data, markers: markersRes.data };
     }
 
+    async function syncConfigToSupabase() {
+        if (!sb) return;
+        const { error } = await sb.from('config').upsert({
+            id: 1,
+            grid_type: state.gridType,
+            grid_width: state.gridWidth,
+            grid_height: state.gridHeight,
+            grid_style: state.gridStyle,
+            grid_thickness: state.gridThickness,
+            grid_color: state.gridColor,
+            grid_opacity: state.gridOpacity,
+            zoom: state.zoom,
+            grid_pan_x: state.gridPan.x,
+            grid_pan_y: state.gridPan.y,
+            scene_width: sceneWidth.value,
+            scene_height: sceneHeight.value,
+            offset_bg_horizontal: offsetBgHorizontal.value,
+            offset_bg_vertical: offsetBgVertical.value,
+        });
+        if (error) throw error;
+    }
+
+    async function syncMarkersToSupabase() {
+        if (!sb) return;
+        const { error: delErr } = await sb.from('markers').delete().gt('id', 0);
+        if (delErr) throw delErr;
+        if (markers.length > 0) {
+            const { error: insErr } = await sb.from('markers').insert(
+                markers.map(m => ({
+                    col: m.col,
+                    row: m.row,
+                    color: m.color,
+                    shape: m.shape,
+                    identifier: m.identifier,
+                    details: m.details,
+                }))
+            );
+            if (insErr) throw insErr;
+        }
+    }
+
     async function syncToSupabase() {
         if (!sb) return;
         try {
-            const { error: configErr } = await sb.from('config').upsert({
-                id: 1,
-                grid_type: state.gridType,
-                grid_width: state.gridWidth,
-                grid_height: state.gridHeight,
-                grid_style: state.gridStyle,
-                grid_thickness: state.gridThickness,
-                grid_color: state.gridColor,
-                grid_opacity: state.gridOpacity,
-                zoom: state.zoom,
-                grid_pan_x: state.gridPan.x,
-                grid_pan_y: state.gridPan.y,
-                scene_width: sceneWidth.value,
-                scene_height: sceneHeight.value,
-                offset_bg_horizontal: offsetBgHorizontal.value,
-                offset_bg_vertical: offsetBgVertical.value,
-            });
-            if (configErr) throw configErr;
-            const { error: delErr } = await sb.from('markers').delete().gt('id', 0);
-            if (delErr) throw delErr;
-            if (markers.length > 0) {
-                const { error: insErr } = await sb.from('markers').insert(
-                    markers.map(m => ({
-                        col: m.col,
-                        row: m.row,
-                        color: m.color,
-                        shape: m.shape,
-                        identifier: m.identifier,
-                        details: m.details,
-                    }))
-                );
-                if (insErr) throw insErr;
-            }
+            await syncConfigToSupabase();
+            await syncMarkersToSupabase();
         } catch (e) {
             console.warn('Supabase sync failed:', e);
             throw e;
@@ -1853,16 +1863,28 @@
         // Import/Export
         exportBtn.addEventListener('click', exportMarkers);
         importBtn.addEventListener('click', importMarkers);
-        document.getElementById('syncToCloud').addEventListener('click', async () => {
+        document.getElementById('syncMarkersToCloud').addEventListener('click', async () => {
             if (!sb) {
                 await showHudAlert('Offline', 'Supabase is not available. Data saved to local storage only.');
                 return;
             }
             try {
-                await syncToSupabase();
-                await showHudAlert('Sync Complete', 'Markers and settings uploaded to cloud.');
+                await syncMarkersToSupabase();
+                await showHudAlert('Sync Complete', 'Markers uploaded to cloud.');
             } catch (e) {
-                await showHudAlert('Sync Failed', 'Could not reach Supabase. Try again later.');
+                await showHudAlert('Sync Failed', 'Could not upload markers. Try again later.');
+            }
+        });
+        document.getElementById('syncGridToCloud').addEventListener('click', async () => {
+            if (!sb) {
+                await showHudAlert('Offline', 'Supabase is not available. Data saved to local storage only.');
+                return;
+            }
+            try {
+                await syncConfigToSupabase();
+                await showHudAlert('Sync Complete', 'Grid settings uploaded to cloud.');
+            } catch (e) {
+                await showHudAlert('Sync Failed', 'Could not upload grid settings. Try again later.');
             }
         });
 
