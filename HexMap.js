@@ -51,8 +51,6 @@
 
     // Viewport HUD overlay refs
     const vpHexReadout = document.getElementById('vpHexReadout');
-    const vpZoomReadout = document.getElementById('vpZoomReadout');
-    const vpEditModePill = document.getElementById('vpEditModePill');
 
     // Tab buttons
     const tabButtons = document.querySelectorAll('.edit-tab-btn');
@@ -826,18 +824,6 @@
                 vpHexReadout.textContent = `HEX ${opts.hex.col}.${opts.hex.row}`;
             } else {
                 vpHexReadout.textContent = '';
-            }
-        }
-        if ('zoom' in opts) {
-            vpZoomReadout.textContent = `ZOOM ${opts.zoom.toFixed(2)}x`;
-        }
-        if ('editMode' in opts) {
-            if (opts.editMode) {
-                vpEditModePill.textContent = '● EDIT MODE';
-                vpEditModePill.classList.add('edit-active');
-            } else {
-                vpEditModePill.textContent = '▶ VIEW MODE';
-                vpEditModePill.classList.remove('edit-active');
             }
         }
     }
@@ -1713,11 +1699,7 @@
         });
 
         // Center on Ship
-        function centerOnShip() {
-            const ship = (selectedMarker && selectedMarker.shape === 'ship')
-                ? selectedMarker
-                : markers.find(m => m.shape === 'ship');
-            if (!ship) return;
+        function panToShip(ship) {
             const stepX = state.gridWidth;
             const stepY = state.gridHeight;
             let wx, wy;
@@ -1739,6 +1721,31 @@
             updateImageTransform();
             render();
             saveState();
+        }
+        async function centerOnShip() {
+            if (selectedMarker && selectedMarker.shape === 'ship') {
+                panToShip(selectedMarker);
+                return;
+            }
+            const ships = markers.filter(m => m.shape === 'ship');
+            if (ships.length === 0) return;
+            if (ships.length === 1) {
+                panToShip(ships[0]);
+                return;
+            }
+            const labels = ships.map((s, i) => `${i + 1}. ${s.identifier || `(unnamed @ ${s.col},${s.row})`}`).join('\n');
+            const raw = await showHudPrompt(
+                'Select Ship',
+                `Multiple ships available. Enter the number of the ship to center on:\n\n${labels}`,
+                { placeholder: '1' }
+            );
+            if (raw === null) return;
+            const idx = parseInt(raw, 10) - 1;
+            if (isNaN(idx) || idx < 0 || idx >= ships.length) {
+                await showHudAlert('Invalid Selection', 'Please enter a valid ship number.');
+                return;
+            }
+            panToShip(ships[idx]);
         }
         document.getElementById('centerOnShipBtn').addEventListener('click', centerOnShip);
 

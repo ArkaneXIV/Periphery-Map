@@ -90,27 +90,6 @@
           50%      { opacity: 1; }
         }
 
-        .vp-pill {
-          position: absolute;
-          font-size: 9px;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-          padding: 5px 12px;
-          border: 1px solid var(--amber-dim);
-          background: var(--bg-panel);
-          color: var(--text-dim);
-          clip-path: var(--clip-tl);
-        }
-        .vp-pill.vp-tr { top: 16px; right: 50px; }
-        .vp-pill.edit-active {
-          border-color: var(--amber);
-          color: var(--amber-bright);
-          background: var(--amber-bg);
-          text-shadow: 0 0 6px var(--amber-glow);
-          box-shadow: 0 0 12px var(--amber-glow);
-          animation: vpPulse 2.5s ease-in-out infinite;
-        }
-
         .vp-readout {
           position: absolute;
           font-size: 9px;
@@ -122,8 +101,7 @@
           background: var(--bg-panel);
           border: 1px solid var(--amber-dim);
         }
-        .vp-readout.vp-bl { bottom: 18px; left: 300px;  min-width: 100px; }
-        .vp-readout.vp-br { bottom: 18px; right: 50px; }
+        .vp-readout.vp-br { bottom: 18px; right: 50px; min-width: 100px; }
         .vp-readout:empty { display: none; }
 
         .vp-notice {
@@ -1094,9 +1072,7 @@
           <div class="vp-corner tr"></div>
           <div class="vp-corner bl"></div>
           <div class="vp-corner br"></div>
-          <div class="vp-pill vp-tr" id="vpEditModePill">▶ VIEW MODE</div>
-          <div class="vp-readout vp-bl" id="vpHexReadout"></div>
-          <div class="vp-readout vp-br" id="vpZoomReadout">ZOOM 1.00x</div>
+          <div class="vp-readout vp-br" id="vpHexReadout"></div>
           <div class="vp-notice" id="vpOfflineNotice" style="display:none;">OFFLINE — SHOWING CACHED DATA</div>
         </div>
         <button id="menuToggle" aria-label="Menu">
