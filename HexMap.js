@@ -1206,10 +1206,34 @@
         render();
     }
 
-    function submitAuth() {
+    async function submitAuth() {
         const input = document.getElementById('authInput');
         const error = document.getElementById('authError');
-        if (input.value !== 'admin') {
+        error.textContent = '';
+        let storedHash = null;
+        if (sb) {
+            try {
+                const { data, error: fetchErr } = await sb
+                    .from('config').select('password_hash').eq('id', 1).single();
+                if (!fetchErr && data && data.password_hash) {
+                    storedHash = data.password_hash;
+                    localStorage.setItem('hexMapPasswordHash', storedHash);
+                }
+            } catch (e) {
+                console.warn('Failed to fetch password hash from Supabase:', e);
+            }
+        }
+        if (!storedHash) {
+            storedHash = localStorage.getItem('hexMapPasswordHash');
+        }
+        if (!storedHash) {
+            error.textContent = 'Connection required for first-time setup.';
+            input.value = '';
+            input.focus();
+            return;
+        }
+        const inputHash = await hashString(input.value);
+        if (inputHash !== storedHash) {
             error.textContent = 'Incorrect code. Access denied.';
             input.value = '';
             input.focus();
@@ -1525,6 +1549,7 @@
             };
             localStorage.setItem('hexMapState', JSON.stringify(store));
         } catch (err) {}
+        if (sb && isEditMode) syncToSupabase();
     }
 
     function loadState() {
@@ -1600,8 +1625,16 @@
         });
     });
 
+    function showOfflineNotice() {
+        const el = document.getElementById('vpOfflineNotice');
+        if (!el) return;
+        el.style.display = '';
+        el.addEventListener('click', () => { el.style.display = 'none'; }, { once: true });
+        setTimeout(() => { el.style.display = 'none'; }, 8000);
+    }
+
     // === EVENT LISTENERS ===
-    function init() {
+    async function init() {
         window.addEventListener('resize', resizeCanvas);
         canvasMarkers.addEventListener('pointermove', handlePointerMove);
         canvasMarkers.addEventListener('pointerleave', () => {
@@ -1847,10 +1880,40 @@
         offsetBgHorizontal.addEventListener('change', updateBackgroundOffset);
         offsetBgVertical.addEventListener('change', updateBackgroundOffset);
 
+        let offline = false;
+        try {
+            const remote = await loadFromSupabase();
+            const store = {
+                markers: remote.markers.map(m => ({
+                    col: m.col, row: m.row, color: m.color,
+                    shape: m.shape, identifier: m.identifier, details: m.details
+                })),
+                settings: {
+                    gridType: remote.config.grid_type,
+                    gridWidth: remote.config.grid_width,
+                    gridHeight: remote.config.grid_height,
+                    gridStyle: remote.config.grid_style,
+                    gridThickness: remote.config.grid_thickness,
+                    gridColor: remote.config.grid_color,
+                    gridOpacity: remote.config.grid_opacity,
+                    zoom: remote.config.zoom,
+                    gridPan: { x: remote.config.grid_pan_x, y: remote.config.grid_pan_y },
+                    sceneWidth: remote.config.scene_width,
+                    sceneHeight: remote.config.scene_height,
+                    offsetBgHorizontal: remote.config.offset_bg_horizontal,
+                    offsetBgVertical: remote.config.offset_bg_vertical,
+                }
+            };
+            localStorage.setItem('hexMapState', JSON.stringify(store));
+        } catch (e) {
+            console.warn('Supabase load failed, using localStorage:', e);
+            offline = true;
+        }
         loadState();
         window.addEventListener('beforeunload', saveState);
         resizeCanvas();
         updateViewportHud({ zoom: state.zoom, editMode: false });
+        if (offline) showOfflineNotice();
     }
 
     init();
