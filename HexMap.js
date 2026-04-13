@@ -1524,6 +1524,7 @@
             }
         } catch (e) {
             console.warn('Supabase sync failed:', e);
+            throw e;
         }
     }
 
@@ -1549,7 +1550,7 @@
             };
             localStorage.setItem('hexMapState', JSON.stringify(store));
         } catch (err) {}
-        if (sb && isEditMode) syncToSupabase();
+        if (sb && isEditMode) syncToSupabase().catch(() => {});
     }
 
     function loadState() {
@@ -1852,6 +1853,18 @@
         // Import/Export
         exportBtn.addEventListener('click', exportMarkers);
         importBtn.addEventListener('click', importMarkers);
+        document.getElementById('syncToCloud').addEventListener('click', async () => {
+            if (!sb) {
+                await showHudAlert('Offline', 'Supabase is not available. Data saved to local storage only.');
+                return;
+            }
+            try {
+                await syncToSupabase();
+                await showHudAlert('Sync Complete', 'Markers and settings uploaded to cloud.');
+            } catch (e) {
+                await showHudAlert('Sync Failed', 'Could not reach Supabase. Try again later.');
+            }
+        });
 
         // Background image upload
         backgroundImageUpload.addEventListener('change', (e) => {
