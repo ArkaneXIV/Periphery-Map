@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git
+
+Never include `Co-Authored-By` lines in commit messages. Do not attribute commits to Claude in any way.
+
 ## Project
 
 Static single-page web app that overlays an interactive hex/square grid on top of a background image (`PeripheryMap.png`) and lets users drop, drag, and annotate markers. There is no build system, package manager, or test suite — just open `HexMap.html` in a browser. All state is rendered to two stacked `<canvas>` elements and persisted to `localStorage` under the key `hexMapState`.
