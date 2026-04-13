@@ -1589,8 +1589,13 @@
                 gridOpacityValue.value = state.gridOpacity;
                 
                 // Restore background and scene settings
-                if (parsed.settings.sceneWidth) sceneWidth.value = parsed.settings.sceneWidth;
-                if (parsed.settings.sceneHeight) sceneHeight.value = parsed.settings.sceneHeight;
+                // Migrate stale pre-2026-04-13 default (1456x816) to actual image size (6000x4000)
+                let sw = parsed.settings.sceneWidth;
+                let sh = parsed.settings.sceneHeight;
+                if (String(sw) === '1456') sw = 6000;
+                if (String(sh) === '816') sh = 4000;
+                if (sw) sceneWidth.value = sw;
+                if (sh) sceneHeight.value = sh;
                 if (parsed.settings.offsetBgHorizontal !== undefined) offsetBgHorizontal.value = parsed.settings.offsetBgHorizontal;
                 if (parsed.settings.offsetBgVertical !== undefined) offsetBgVertical.value = parsed.settings.offsetBgVertical;
                 
