@@ -1451,6 +1451,58 @@
         return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
+    async function loadFromSupabase() {
+        if (!sb) throw new Error('No Supabase client');
+        const [configRes, markersRes] = await Promise.all([
+            sb.from('config').select('*').eq('id', 1).single(),
+            sb.from('markers').select('*')
+        ]);
+        if (configRes.error) throw configRes.error;
+        if (markersRes.error) throw markersRes.error;
+        return { config: configRes.data, markers: markersRes.data };
+    }
+
+    async function syncToSupabase() {
+        if (!sb) return;
+        try {
+            const { error: configErr } = await sb.from('config').upsert({
+                id: 1,
+                grid_type: state.gridType,
+                grid_width: state.gridWidth,
+                grid_height: state.gridHeight,
+                grid_style: state.gridStyle,
+                grid_thickness: state.gridThickness,
+                grid_color: state.gridColor,
+                grid_opacity: state.gridOpacity,
+                zoom: state.zoom,
+                grid_pan_x: state.gridPan.x,
+                grid_pan_y: state.gridPan.y,
+                scene_width: sceneWidth.value,
+                scene_height: sceneHeight.value,
+                offset_bg_horizontal: offsetBgHorizontal.value,
+                offset_bg_vertical: offsetBgVertical.value,
+            });
+            if (configErr) throw configErr;
+            const { error: delErr } = await sb.from('markers').delete().gt('id', 0);
+            if (delErr) throw delErr;
+            if (markers.length > 0) {
+                const { error: insErr } = await sb.from('markers').insert(
+                    markers.map(m => ({
+                        col: m.col,
+                        row: m.row,
+                        color: m.color,
+                        shape: m.shape,
+                        identifier: m.identifier,
+                        details: m.details,
+                    }))
+                );
+                if (insErr) throw insErr;
+            }
+        } catch (e) {
+            console.warn('Supabase sync failed:', e);
+        }
+    }
+
     function saveState() {
         try {
             const store = {

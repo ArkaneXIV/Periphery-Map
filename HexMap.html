@@ -126,6 +126,25 @@
         .vp-readout.vp-br { bottom: 18px; right: 50px; }
         .vp-readout:empty { display: none; }
 
+        .vp-notice {
+          position: absolute;
+          top: 46px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-family: var(--font-mono);
+          font-size: 9px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          color: var(--amber-bright);
+          background: var(--bg-panel);
+          border: 1px solid var(--amber-dim);
+          padding: 5px 16px;
+          z-index: 11;
+          pointer-events: auto;
+          cursor: pointer;
+          animation: vpPulse 2s ease-in-out 3;
+        }
+
         /* === Utility: scanlines overlay === */
         .scanlines {
           position: relative;
@@ -1078,6 +1097,7 @@
           <div class="vp-pill vp-tr" id="vpEditModePill">▶ VIEW MODE</div>
           <div class="vp-readout vp-bl" id="vpHexReadout"></div>
           <div class="vp-readout vp-br" id="vpZoomReadout">ZOOM 1.00x</div>
+          <div class="vp-notice" id="vpOfflineNotice" style="display:none;">OFFLINE — SHOWING CACHED DATA</div>
         </div>
         <button id="menuToggle" aria-label="Menu">
             <span class="hamburger-bar"></span>
