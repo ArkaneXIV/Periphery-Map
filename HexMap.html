@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Periphery Map - Interactive Grid</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+          /* Color tokens */
+          --bg-deep:      #05080c;
+          --bg-panel:     rgba(8,14,22,0.92);
+          --bg-elev:      rgba(8,14,22,0.96);
+          --amber:        #ffaa33;
+          --amber-bright: #fff3d4;
+          --amber-dim:    rgba(255,170,40,0.4);
+          --amber-glow:   rgba(255,170,40,0.5);
+          --amber-bg:     rgba(255,170,40,0.18);
+          --text:         #d6e2ee;
+          --text-dim:     rgba(214,226,238,0.6);
+          --danger:       #ff4a3d;
+          --scan:         rgba(255,170,40,0.04);
+
+          /* Typography tokens */
+          --font-mono: 'JetBrains Mono', 'Consolas', 'SF Mono', monospace;
+          --font-sans: 'Inter', -apple-system, sans-serif;
+          --fs-h:     8px;
+          --fs-label: 9px;
+          --fs-body:  11px;
+          --fs-name:  13px;
+
+          /* Decoration primitives */
+          --clip-tl: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+          --clip-tr: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+        }
+
+        body {
+          margin: 0;
+          overflow: hidden;
+          background: var(--bg-deep);
+          color: var(--text);
+          font-family: var(--font-mono);
+          font-size: var(--fs-body);
+          -webkit-font-smoothing: antialiased;
+        }
+
+        #mapContainer {
+          position: relative;
+          width: 100vw;
+          height: 100vh;
+        }
+
+        #hexCanvas, #markerCanvas {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          pointer-events: none;
+        }
+
+        #markerCanvas {
+          pointer-events: auto;
+        }
+
+        /* === Viewport HUD overlay === */
+        #viewportHud {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: 10;
+          font-family: var(--font-mono);
+        }
+        .vp-corner {
+          position: absolute;
+          width: 26px;
+          height: 26px;
+          border: 2px solid var(--amber);
+          filter: drop-shadow(0 0 6px var(--amber-glow));
+        }
+        .vp-corner.tl { top: 12px; left: 12px;  border-right: none; border-bottom: none; }
+        .vp-corner.tr { top: 12px; right: 12px; border-left:  none; border-bottom: none; }
+        .vp-corner.bl { bottom: 12px; left: 12px;  border-right: none; border-top: none; }
+        .vp-corner.br { bottom: 12px; right: 12px; border-left:  none; border-top: none; }
+
+        @keyframes vpPulse {
+          0%, 100% { opacity: 0.4; }
+          50%      { opacity: 1; }
+        }
+
+        .vp-pill {
+          position: absolute;
+          font-size: 9px;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          padding: 5px 12px;
+          border: 1px solid var(--amber-dim);
+          background: var(--bg-panel);
+          color: var(--text-dim);
+          clip-path: var(--clip-tl);
+        }
+        .vp-pill.vp-tr { top: 16px; right: 50px; }
+        .vp-pill.edit-active {
+          border-color: var(--amber);
+          color: var(--amber-bright);
+          background: var(--amber-bg);
+          text-shadow: 0 0 6px var(--amber-glow);
+          box-shadow: 0 0 12px var(--amber-glow);
+          animation: vpPulse 2.5s ease-in-out infinite;
+        }
+
+        .vp-readout {
+          position: absolute;
+          font-size: 9px;
+          letter-spacing: 2px;
+          color: var(--amber);
+          text-transform: uppercase;
+          text-shadow: 0 0 6px var(--amber-glow);
+          padding: 4px 10px;
+          background: var(--bg-panel);
+          border: 1px solid var(--amber-dim);
+        }
+        .vp-readout.vp-bl { bottom: 18px; left: 300px;  min-width: 100px; }
+        .vp-readout.vp-br { bottom: 18px; right: 50px; }
+        .vp-readout:empty { display: none; }
+
+        /* === Utility: scanlines overlay === */
+        .scanlines {
+          position: relative;
+        }
+        .scanlines::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image: repeating-linear-gradient(
+            0deg,
+            transparent 0,
+            transparent 3px,
+            var(--scan) 3px,
+            var(--scan) 4px
+          );
+          pointer-events: none;
+          z-index: 1;
+        }
+
+        /* === Utility: 4 corner brackets via child elements === */
+        .hud-corners > .hc {
+          position: absolute;
+          width: 12px;
+          height: 12px;
+          border: 1.5px solid var(--amber);
+          pointer-events: none;
+          z-index: 2;
+        }
+        .hud-corners > .hc.tl { top: 4px; left: 4px;  border-right: none; border-bottom: none; }
+        .hud-corners > .hc.tr { top: 4px; right: 4px; border-left:  none; border-bottom: none; }
+        .hud-corners > .hc.bl { bottom: 4px; left: 4px;  border-right: none; border-top: none; }
+        .hud-corners > .hc.br { bottom: 4px; right: 4px; border-left:  none; border-top: none; }
+
+        /* === Utility: glow text === */
+        .glow-text {
+          text-shadow: 0 0 6px var(--amber-glow);
+        }
+
+        /* === Tooltip === */
+        .tooltip {
+          position: absolute;
+          background: var(--bg-elev);
+          color: var(--amber-bright);
+          border: 1px solid var(--amber);
+          padding: 5px 9px;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+          pointer-events: none;
+          z-index: 20;
+          box-shadow: 0 0 10px var(--amber-glow);
+          display: none;
+        }
+        
+        /* Tab Styling */
+        .edit-tabs {
+          display: flex;
+          gap: 0;
+          margin-bottom: 14px;
+          border-bottom: 1px solid var(--amber-dim);
+          position: relative;
+        }
+        .edit-tabs::before,
+        .edit-tabs::after {
+          content: '';
+          position: absolute;
+          bottom: -1px;
+          width: 8px;
+          height: 1px;
+          background: var(--amber);
+        }
+        .edit-tabs::before { left: 0; box-shadow: 0 0 4px var(--amber-glow); }
+        .edit-tabs::after  { right: 0; box-shadow: 0 0 4px var(--amber-glow); }
+        .edit-tab-btn {
+          flex: 1;
+          padding: 8px 12px;
+          background: transparent;
+          color: var(--text-dim);
+          border: none;
+          cursor: pointer;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          border-bottom: 2px solid transparent;
+          transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .edit-tab-btn:hover {
+          color: var(--text);
+          background: rgba(255,170,40,0.04);
+        }
+        .edit-tab-btn.active {
+          color: var(--amber-bright);
+          border-bottom-color: var(--amber);
+          background: rgba(255,170,40,0.06);
+          text-shadow: 0 0 6px var(--amber-glow);
+        }
+        .edit-tab-content {
+          display: none;
+        }
+        .edit-tab-content.active {
+          display: block;
+        }
+        
+        /* Input Styling */
+        .control-group {
+          margin-bottom: 14px;
+        }
+        .control-label {
+          display: block;
+          font-family: var(--font-mono);
+          font-weight: 700;
+          margin-bottom: 5px;
+          font-size: var(--fs-label);
+          color: var(--amber);
+          text-transform: uppercase;
+          letter-spacing: 1.8px;
+          opacity: 0.85;
+        }
+        .control-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: var(--fs-body);
+          margin-bottom: 6px;
+          color: var(--text);
+        }
+        .control-row label {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-family: var(--font-mono);
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          font-size: 10px;
+          color: var(--text-dim);
+        }
+        .spacer {
+          border-top: 1px solid var(--amber-dim);
+          margin: 14px 0;
+          position: relative;
+        }
+        .spacer::before {
+          content: '';
+          position: absolute;
+          top: -1px;
+          left: 0;
+          width: 8px;
+          height: 1px;
+          background: var(--amber);
+          box-shadow: 0 0 4px var(--amber-glow);
+        }
+
+        /* === Inputs inside the edit panel === */
+        #editPanel input[type="text"],
+        #editPanel input[type="number"],
+        #editPanel input[type="password"],
+        #editPanel input[type="file"],
+        #editPanel select,
+        #editPanel textarea {
+          width: 100%;
+          padding: 6px 8px;
+          border: 1px solid var(--amber-dim);
+          background: rgba(255,255,255,0.04);
+          color: var(--text);
+          font-family: var(--font-mono);
+          font-size: var(--fs-body);
+          outline: none;
+          box-sizing: border-box;
+          transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+        }
+        #editPanel input[type="text"]:focus,
+        #editPanel input[type="number"]:focus,
+        #editPanel input[type="password"]:focus,
+        #editPanel select:focus,
+        #editPanel textarea:focus {
+          border-color: var(--amber);
+          box-shadow: 0 0 10px var(--amber-glow), inset 0 0 6px rgba(255,170,40,0.05);
+          background: rgba(255,170,40,0.04);
+        }
+        #editPanel textarea {
+          resize: vertical;
+          font-family: var(--font-mono);
+        }
+        #editPanel select {
+          appearance: none;
+          -webkit-appearance: none;
+          background-image: linear-gradient(45deg, transparent 50%, var(--amber) 50%),
+                            linear-gradient(135deg, var(--amber) 50%, transparent 50%);
+          background-position: calc(100% - 14px) 12px, calc(100% - 9px) 12px;
+          background-size: 5px 5px, 5px 5px;
+          background-repeat: no-repeat;
+          padding-right: 22px;
+        }
+        #editPanel input[type="number"]::-webkit-outer-spin-button,
+        #editPanel input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        #editPanel input[type="number"] { -moz-appearance: textfield; }
+
+        /* Range slider */
+        #editPanel input[type="range"] {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 100%;
+          height: 4px;
+          background: var(--amber-dim);
+          outline: none;
+          margin: 8px 0;
+          cursor: pointer;
+        }
+        #editPanel input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 12px;
+          height: 12px;
+          background: var(--amber);
+          cursor: pointer;
+          box-shadow: 0 0 8px var(--amber-glow);
+        }
+        #editPanel input[type="range"]::-moz-range-thumb {
+          width: 12px;
+          height: 12px;
+          background: var(--amber);
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 0 8px var(--amber-glow);
+        }
+
+        /* Native color picker — wrap visually */
+        #editPanel input[type="color"] {
+          width: 36px;
+          height: 28px;
+          padding: 2px;
+          border: 1px solid var(--amber-dim);
+          background: rgba(255,255,255,0.04);
+          cursor: pointer;
+        }
+        #editPanel input[type="color"]:hover {
+          border-color: var(--amber);
+          box-shadow: 0 0 8px var(--amber-glow);
+        }
+
+        /* File input — restyle the button portion across browsers */
+        #editPanel input[type="file"]::file-selector-button {
+          background: var(--amber-bg);
+          color: var(--amber-bright);
+          border: 1px solid var(--amber-dim);
+          font-family: var(--font-mono);
+          font-size: 9px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          padding: 4px 8px;
+          margin-right: 8px;
+          cursor: pointer;
+        }
+
+        /* Slider with value */
+        .slider-value {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .slider-value input[type="range"] {
+            flex: 1;
+            margin: 0;
+        }
+        .slider-value input[type="number"] {
+            width: 50px;
+            text-align: right;
+        }
+
+        /* === Buttons === */
+        .btn-group {
+          display: flex;
+          gap: 6px;
+          margin-top: 10px;
+        }
+        .btn {
+          flex: 1;
+          padding: 7px 12px;
+          border: 1px solid var(--amber-dim);
+          background: transparent;
+          color: var(--text);
+          cursor: pointer;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 1.6px;
+          text-transform: uppercase;
+          clip-path: var(--clip-tl);
+          transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+        }
+        .btn-primary {
+          border-color: var(--amber);
+          background: var(--amber-bg);
+          color: var(--amber-bright);
+          text-shadow: 0 0 4px var(--amber-glow);
+        }
+        .btn-primary:hover {
+          background: rgba(255,170,40,0.32);
+          box-shadow: 0 0 12px var(--amber-glow);
+        }
+        .btn-secondary {
+          border-color: var(--amber-dim);
+          background: rgba(255,255,255,0.02);
+          color: var(--text);
+        }
+        .btn-secondary:hover {
+          background: rgba(255,170,40,0.08);
+          border-color: var(--amber);
+          color: var(--amber-bright);
+        }
+        .btn-danger {
+          border-color: var(--danger);
+          background: rgba(255,74,61,0.1);
+          color: var(--danger);
+        }
+        .btn-danger:hover {
+          background: var(--danger);
+          color: #fff;
+          box-shadow: 0 0 12px rgba(255,74,61,0.6);
+        }
+        
+        /* === Color swatches === */
+        #markerColorSwatches {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 5px;
+        }
+        .color-swatch {
+          border: 1px solid var(--amber-dim);
+          width: 100%;
+          aspect-ratio: 1;
+          cursor: pointer;
+          padding: 0;
+          position: relative;
+          transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s;
+        }
+        .color-swatch:hover {
+          border-color: var(--amber);
+          transform: scale(1.05);
+          box-shadow: 0 0 8px var(--amber-glow);
+        }
+        .color-swatch.active {
+          border: 2px solid var(--amber);
+          box-shadow: 0 0 12px var(--amber-glow);
+        }
+        .color-swatch.active::after {
+          content: '';
+          position: absolute;
+          top: 1px;
+          right: 1px;
+          width: 5px;
+          height: 5px;
+          background: var(--amber);
+          box-shadow: 0 0 4px var(--amber);
+        }
+
+        /* === Shape picker === */
+        .shape-picker {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 5px;
+        }
+        .shape-btn {
+          background: rgba(255,255,255,0.02);
+          border: 1px solid var(--amber-dim);
+          cursor: pointer;
+          padding: 7px 4px 5px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          color: var(--text-dim);
+          transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+        }
+        .shape-btn:hover {
+          background: rgba(255,170,40,0.06);
+          border-color: rgba(255,170,40,0.7);
+          color: var(--text);
+        }
+        .shape-btn.active {
+          background: var(--amber-bg);
+          border-color: var(--amber);
+          color: var(--amber-bright);
+          box-shadow: 0 0 10px var(--amber-glow), inset 0 0 6px rgba(255,170,40,0.1);
+        }
+        .shape-btn svg { display: block; }
+        .shape-btn span {
+          font-family: var(--font-mono);
+          font-size: 8px;
+          text-transform: uppercase;
+          letter-spacing: 1.2px;
+        }
+
+        /* === Marker info panel === */
+        #markerInfoPanel {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 16;
+          background: var(--bg-panel);
+          border: 1px solid var(--amber-dim);
+          color: var(--text);
+          padding: 12px 14px 14px;
+          width: 260px;
+          font-family: var(--font-mono);
+          clip-path: var(--clip-tl);
+          box-shadow: 0 0 32px rgba(0,0,0,0.7), 0 0 20px rgba(255,170,40,0.08);
+        }
+        .info-panel-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid var(--amber-dim);
+        }
+        .info-panel-title {
+          font-size: var(--fs-label);
+          letter-spacing: 2px;
+          color: var(--amber);
+          text-transform: uppercase;
+          opacity: 0.85;
+        }
+        .info-panel-close {
+          background: none;
+          border: none;
+          color: var(--amber-dim);
+          cursor: pointer;
+          font-size: 18px;
+          line-height: 1;
+          padding: 0 2px;
+          transition: color 0.15s, text-shadow 0.15s;
+        }
+        .info-panel-close:hover {
+          color: var(--amber);
+          text-shadow: 0 0 6px var(--amber-glow);
+        }
+        #infoPanelContent .hex-coord {
+          font-size: var(--fs-label);
+          letter-spacing: 2px;
+          color: var(--amber);
+          margin-bottom: 12px;
+          text-transform: uppercase;
+        }
+        #infoPanelContent .empty-hex {
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--text-dim);
+          font-style: italic;
+        }
+        #infoPanelContent .marker-entry {
+          padding: 10px 0;
+        }
+        #infoPanelContent .marker-entry + .marker-entry {
+          border-top: 1px solid var(--amber-dim);
+        }
+        #infoPanelContent .marker-row {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          margin-bottom: 4px;
+        }
+        #infoPanelContent .marker-dot {
+          width: 9px;
+          height: 9px;
+          flex-shrink: 0;
+          /* background-color set inline per-marker */
+        }
+        #infoPanelContent .marker-name {
+          font-family: var(--font-mono);
+          font-size: var(--fs-name);
+          font-weight: 700;
+          color: var(--amber-bright);
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          text-shadow: 0 0 6px var(--amber-glow);
+          flex: 1;
+          min-width: 0;
+        }
+        #infoPanelContent .marker-name.empty {
+          color: var(--text-dim);
+          font-style: italic;
+          text-shadow: none;
+          text-transform: none;
+        }
+        #infoPanelContent .marker-shape {
+          font-family: var(--font-mono);
+          font-size: 9px;
+          color: var(--text-dim);
+          text-transform: uppercase;
+          letter-spacing: 1.2px;
+          flex-shrink: 0;
+        }
+        #infoPanelContent .marker-details {
+          font-family: var(--font-sans);
+          font-size: 11px;
+          color: var(--text-dim);
+          line-height: 1.45;
+          white-space: pre-wrap;
+          padding-left: 18px;
+          margin-top: 4px;
+        }
+
+        /* === HUD modal (shared by auth, confirm-delete, and dynamic hudModal) === */
+        #authOverlay,
+        #confirmDeleteOverlay,
+        #hudModalOverlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.7);
+          z-index: 100;
+          align-items: center;
+          justify-content: center;
+          backdrop-filter: blur(2px);
+        }
+        #authOverlay.visible,
+        #confirmDeleteOverlay.visible,
+        #hudModalOverlay.visible {
+          display: flex;
+        }
+
+        .hud-modal {
+          background: var(--bg-elev);
+          border: 1px solid var(--amber);
+          padding: 24px 26px 20px;
+          width: 320px;
+          color: var(--text);
+          font-family: var(--font-mono);
+          clip-path: var(--clip-tl);
+          box-shadow: 0 0 40px rgba(0,0,0,0.8), 0 0 24px rgba(255,170,40,0.15);
+          position: relative;
+        }
+        .hud-modal::before {
+          content: '// AUTHORIZATION';
+          display: block;
+          font-size: var(--fs-label);
+          letter-spacing: 2px;
+          color: var(--amber);
+          text-transform: uppercase;
+          margin-bottom: 12px;
+          opacity: 0.85;
+        }
+        .hud-modal h3 {
+          margin: 0 0 8px;
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--amber-bright);
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          text-shadow: 0 0 6px var(--amber-glow);
+        }
+        .hud-modal p {
+          margin: 0 0 14px;
+          font-size: 11px;
+          color: var(--text-dim);
+          line-height: 1.55;
+        }
+        .hud-modal input[type="text"],
+        .hud-modal input[type="password"] {
+          width: 100%;
+          padding: 8px 10px;
+          border: 1px solid var(--amber-dim);
+          background: rgba(255,255,255,0.04);
+          color: var(--text);
+          font-family: var(--font-mono);
+          font-size: 13px;
+          outline: none;
+          box-sizing: border-box;
+          margin-bottom: 8px;
+          letter-spacing: 1px;
+          transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+        }
+        .hud-modal input[type="text"]:focus,
+        .hud-modal input[type="password"]:focus {
+          border-color: var(--amber);
+          box-shadow: 0 0 10px var(--amber-glow);
+          background: rgba(255,170,40,0.04);
+        }
+        .hud-modal .hud-modal-error {
+          font-size: 10px;
+          color: var(--danger);
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          min-height: 14px;
+          margin-bottom: 12px;
+        }
+        .hud-modal .hud-modal-btns,
+        .hud-modal .auth-btns {
+          display: flex;
+          gap: 8px;
+          justify-content: flex-end;
+        }
+        .hud-modal .hud-modal-btns button,
+        .hud-modal .auth-btns button {
+          padding: 7px 16px;
+          border: 1px solid var(--amber-dim);
+          background: transparent;
+          color: var(--text);
+          cursor: pointer;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 1.6px;
+          text-transform: uppercase;
+          clip-path: var(--clip-tl);
+          transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+        }
+        .hud-modal .hud-modal-btns button:hover,
+        .hud-modal .auth-btns button:hover {
+          background: rgba(255,170,40,0.08);
+          border-color: var(--amber);
+          color: var(--amber-bright);
+        }
+        .hud-modal .hud-modal-btns .hud-confirm,
+        .hud-modal #authSubmit {
+          border-color: var(--amber);
+          background: var(--amber-bg);
+          color: var(--amber-bright);
+        }
+        .hud-modal .hud-modal-btns .hud-confirm:hover,
+        .hud-modal #authSubmit:hover {
+          background: rgba(255,170,40,0.32);
+          box-shadow: 0 0 12px var(--amber-glow);
+        }
+        .hud-modal #confirmDeleteSubmit {
+          border-color: var(--danger);
+          background: rgba(255,74,61,0.12);
+          color: var(--danger);
+        }
+        .hud-modal #confirmDeleteSubmit:hover {
+          background: var(--danger);
+          color: #fff;
+          box-shadow: 0 0 12px rgba(255,74,61,0.6);
+        }
+        #confirmDeleteOverlay .hud-modal::before {
+          content: '// DESTRUCTIVE OPERATION';
+          color: var(--danger);
+        }
+        #confirmDeleteOverlay .hud-modal {
+          border-color: var(--danger);
+          box-shadow: 0 0 40px rgba(0,0,0,0.8), 0 0 24px rgba(255,74,61,0.18);
+        }
+        #confirmDeleteOverlay .hud-modal h3 {
+          color: var(--danger);
+          text-shadow: 0 0 6px rgba(255,74,61,0.6);
+        }
+        #hudModalOverlay .hud-modal::before {
+          content: '// SYSTEM MESSAGE';
+        }
+
+        #menuToggle {
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          z-index: 20;
+          background: var(--bg-panel);
+          border: 1px solid var(--amber-dim);
+          width: 40px;
+          height: 40px;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          padding: 0;
+          clip-path: var(--clip-tl);
+          transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        #menuToggle:hover {
+          border-color: var(--amber);
+          box-shadow: 0 0 12px var(--amber-glow);
+        }
+        .hamburger-bar {
+          width: 18px;
+          height: 2px;
+          background: var(--amber);
+          pointer-events: none;
+          box-shadow: 0 0 4px var(--amber-glow);
+        }
+
+        #sideMenu {
+          position: absolute;
+          top: 58px;
+          left: 10px;
+          z-index: 19;
+          background: var(--bg-panel);
+          border: 1px solid var(--amber-dim);
+          padding: 10px 8px;
+          width: 220px;
+          box-shadow: 0 0 24px rgba(0,0,0,0.7), 0 0 16px rgba(255,170,40,0.08);
+          display: none;
+          flex-direction: column;
+          gap: 5px;
+          clip-path: var(--clip-tl);
+        }
+        #sideMenu.open {
+          display: flex;
+        }
+        #sideMenu::before {
+          content: '// SYSTEM';
+          display: block;
+          font-family: var(--font-mono);
+          font-size: var(--fs-label);
+          letter-spacing: 2px;
+          color: var(--amber);
+          margin: 2px 4px 6px;
+          text-transform: uppercase;
+          opacity: 0.85;
+        }
+        .menu-btn {
+          width: 100%;
+          padding: 7px 10px;
+          background: rgba(255,255,255,0.02);
+          border: 1px solid var(--amber-dim);
+          color: var(--text);
+          font-family: var(--font-mono);
+          font-size: 10px;
+          font-weight: 500;
+          letter-spacing: 1.4px;
+          text-transform: uppercase;
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          box-sizing: border-box;
+        }
+        .menu-btn::before {
+          content: '►';
+          color: var(--amber);
+          font-size: 9px;
+          flex-shrink: 0;
+        }
+        .menu-btn svg {
+          flex-shrink: 0;
+          color: var(--amber);
+          opacity: 0.6;
+        }
+        .menu-btn:hover {
+          background: rgba(255,170,40,0.06);
+          border-color: rgba(255,170,40,0.7);
+          color: var(--amber-bright);
+        }
+        .menu-btn:hover svg { opacity: 1; }
+        .menu-btn.active {
+          background: var(--amber-bg);
+          border-color: var(--amber);
+          color: var(--amber-bright);
+          box-shadow: 0 0 10px var(--amber-glow), inset 0 0 8px rgba(255,170,40,0.12);
+          text-shadow: 0 0 6px var(--amber-glow);
+        }
+        .menu-btn.active svg { opacity: 1; }
+        .menu-btn:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+        }
+        .menu-divider {
+          height: 1px;
+          background: var(--amber-dim);
+          margin: 4px 0;
+        }
+
+        #editPanel {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 15;
+          background: var(--bg-panel);
+          border: 1px solid var(--amber-dim);
+          padding: 14px 14px 12px;
+          width: 290px;
+          max-height: 90vh;
+          overflow-y: auto;
+          color: var(--text);
+          font-family: var(--font-mono);
+          font-size: var(--fs-body);
+          clip-path: var(--clip-tl);
+          box-shadow: 0 0 32px rgba(0,0,0,0.7), 0 0 20px rgba(255,170,40,0.08);
+        }
+        #editPanel::before {
+          content: '// EDIT INTERFACE';
+          display: block;
+          font-size: var(--fs-label);
+          letter-spacing: 2px;
+          color: var(--amber);
+          text-transform: uppercase;
+          margin-bottom: 10px;
+          opacity: 0.85;
+        }
+        /* Custom scrollbar for the panel */
+        #editPanel::-webkit-scrollbar { width: 8px; }
+        #editPanel::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+        #editPanel::-webkit-scrollbar-thumb { background: var(--amber-dim); }
+        #editPanel::-webkit-scrollbar-thumb:hover { background: var(--amber); }
+
+        /* === Radar minimap === */
+        #minimapWrap {
+          position: absolute;
+          bottom: 28px;
+          left: 60px;
+          z-index: 15;
+          display: none;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+        }
+        #minimapWrap.visible {
+          display: flex;
+        }
+        .radar-frame {
+          position: relative;
+          width: 220px;
+          height: 220px;
+          border-radius: 50%;
+          border: 2px solid var(--amber);
+          background: var(--bg-deep);
+          box-shadow: 0 0 24px rgba(0,0,0,0.7), 0 0 18px rgba(255,170,40,0.18), inset 0 0 30px rgba(0,0,0,0.6);
+          overflow: hidden;
+        }
+        .radar-frame::before {
+          content: '';
+          position: absolute;
+          inset: -7px;
+          border-radius: 50%;
+          border: 1px solid var(--amber-dim);
+          pointer-events: none;
+        }
+        #minimapCanvas {
+          display: block;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          cursor: crosshair;
+          clip-path: circle(48% at 50% 50%);
+        }
+        .radar-ring {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          border: 1px solid rgba(255,170,40,0.25);
+          border-radius: 50%;
+          pointer-events: none;
+          transform: translate(-50%, -50%);
+        }
+        .radar-ring-1 { width: 33%; height: 33%; }
+        .radar-ring-2 { width: 66%; height: 66%; }
+        .radar-sweep {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          background: conic-gradient(from 0deg at 50% 50%, rgba(255,170,40,0) 0deg, rgba(255,170,40,0.25) 30deg, rgba(255,170,40,0) 60deg, rgba(255,170,40,0) 360deg);
+          border-radius: 50%;
+          animation: radarSweep 4s linear infinite;
+          mix-blend-mode: screen;
+        }
+        @keyframes radarSweep {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        .radar-cardinal {
+          position: absolute;
+          font-family: var(--font-mono);
+          font-size: 9px;
+          font-weight: 700;
+          color: var(--amber);
+          text-shadow: 0 0 4px var(--amber-glow);
+          pointer-events: none;
+          letter-spacing: 1px;
+        }
+        .radar-cardinal.n { top: 4px;    left: 50%; transform: translateX(-50%); }
+        .radar-cardinal.e { right: 4px;  top: 50%; transform: translateY(-50%); }
+        .radar-cardinal.s { bottom: 4px; left: 50%; transform: translateX(-50%); }
+        .radar-cardinal.w { left: 4px;   top: 50%; transform: translateY(-50%); }
+        #minimapLabel {
+          font-family: var(--font-mono);
+          font-size: 9px;
+          letter-spacing: 1.8px;
+          text-transform: uppercase;
+          color: var(--amber);
+          opacity: 0.7;
+          text-align: center;
+          user-select: none;
+        }
+
+        /* Ship marker on radar (positioned by JS in Task 19) */
+        .radar-ship {
+          position: absolute;
+          pointer-events: none;
+          width: 0;
+          height: 0;
+        }
+        .radar-ship-cross {
+          position: absolute;
+          left: -6px;
+          top: -6px;
+          width: 12px;
+          height: 12px;
+        }
+        .radar-ship-cross::before,
+        .radar-ship-cross::after {
+          content: '';
+          position: absolute;
+          background: var(--amber-bright);
+          box-shadow: 0 0 6px var(--amber);
+        }
+        .radar-ship-cross::before { left: 5px; top: 0; width: 2px; height: 12px; }
+        .radar-ship-cross::after  { left: 0; top: 5px; width: 12px; height: 2px; }
+        .radar-ship-ring {
+          position: absolute;
+          left: -10px;
+          top: -10px;
+          width: 20px;
+          height: 20px;
+          border: 1.5px solid var(--amber);
+          border-radius: 50%;
+          box-shadow: 0 0 8px var(--amber-glow);
+          animation: radarShipPulse 2s ease-in-out infinite;
+        }
+        @keyframes radarShipPulse {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          50%      { transform: scale(1.4); opacity: 0.4; }
+        }
+    </style>
+</head>
+<body>
+    <div id="mapContainer">
+        <img id="backgroundImg" src="PeripheryMap.png" style="position:absolute;top:50%;left:50%;width:6000px;height:4000px;transform:translate(-50%,-50%);transform-origin:center center;z-index:0;" />
+        <canvas id="hexCanvas"></canvas>
+        <canvas id="markerCanvas"></canvas>
+        <!-- Viewport HUD overlay -->
+        <div id="viewportHud">
+          <div class="vp-corner tl"></div>
+          <div class="vp-corner tr"></div>
+          <div class="vp-corner bl"></div>
+          <div class="vp-corner br"></div>
+          <div class="vp-pill vp-tr" id="vpEditModePill">▶ VIEW MODE</div>
+          <div class="vp-readout vp-bl" id="vpHexReadout"></div>
+          <div class="vp-readout vp-br" id="vpZoomReadout">ZOOM 1.00x</div>
+        </div>
+        <button id="menuToggle" aria-label="Menu">
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
+            <span class="hamburger-bar"></span>
+        </button>
+
+        <div id="sideMenu">
+            <button id="modeToggle" class="menu-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                <span id="modeToggleLabel">Switch to Edit Mode</span>
+            </button>
+            <div class="menu-divider"></div>
+            <button id="highlightMarkersBtn" class="menu-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/>
+                </svg>
+                <span>Highlight Markers</span>
+            </button>
+            <button id="centerOnShipBtn" class="menu-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                    <circle cx="12" cy="12" r="3"/>
+                    <line x1="12" y1="2" x2="12" y2="6"/>
+                    <line x1="12" y1="18" x2="12" y2="22"/>
+                    <line x1="2" y1="12" x2="6" y2="12"/>
+                    <line x1="18" y1="12" x2="22" y2="12"/>
+                </svg>
+                <span>Center on Ship</span>
+            </button>
+            <button id="toggleMinimapBtn" class="menu-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <rect x="9" y="9" width="6" height="6"/>
+                </svg>
+                <span>Toggle Minimap</span>
+            </button>
+        </div>
+
+        <!-- Minimap (radar) -->
+        <div id="minimapWrap">
+          <div class="radar-frame">
+            <canvas id="minimapCanvas" width="210" height="210"></canvas>
+            <div class="radar-ring radar-ring-1"></div>
+            <div class="radar-ring radar-ring-2"></div>
+            <div class="radar-sweep"></div>
+            <div class="radar-cardinal n">N</div>
+            <div class="radar-cardinal e">E</div>
+            <div class="radar-cardinal s">S</div>
+            <div class="radar-cardinal w">W</div>
+            <div class="radar-ship" id="radarShip" style="display:none;">
+              <div class="radar-ship-cross"></div>
+              <div class="radar-ship-ring"></div>
+            </div>
+          </div>
+          <div id="minimapLabel">// RADAR — CLICK TO NAVIGATE</div>
+        </div>
+
+        <!-- Auth modal -->
+        <div id="authOverlay">
+            <div id="authBox" class="hud-modal">
+                <h3>Edit Mode</h3>
+                <p>Enter the authorization code to continue.</p>
+                <input id="authInput" type="password" placeholder="Authorization code" autocomplete="off" />
+                <div id="authError" class="hud-modal-error"></div>
+                <div class="auth-btns">
+                    <button id="authCancel">Cancel</button>
+                    <button id="authSubmit">Unlock</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirm delete modal -->
+        <div id="confirmDeleteOverlay">
+            <div id="confirmDeleteBox" class="hud-modal">
+                <h3>Delete All Markers</h3>
+                <p id="confirmDeleteMsg">This will permanently delete all markers and cannot be undone.<br>Type <strong>DELETE</strong> to confirm.</p>
+                <input id="confirmDeleteInput" type="text" placeholder="Type DELETE" autocomplete="off" />
+                <div id="confirmDeleteError" class="hud-modal-error"></div>
+                <div class="auth-btns">
+                    <button id="confirmDeleteCancel">Cancel</button>
+                    <button id="confirmDeleteSubmit" class="btn btn-danger">Delete All</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dynamic HUD modal (used by showHudAlert/Confirm/Prompt) -->
+        <div id="hudModalOverlay">
+          <div id="hudModalBox" class="hud-modal">
+            <h3 id="hudModalTitle"></h3>
+            <p id="hudModalMessage"></p>
+            <input id="hudModalInput" type="text" style="display:none;" autocomplete="off" />
+            <div id="hudModalError" class="hud-modal-error"></div>
+            <div class="hud-modal-btns">
+              <button id="hudModalCancel">Cancel</button>
+              <button id="hudModalConfirm" class="hud-confirm">OK</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="editPanel" style="display:none;">
+            
+            <!-- TABS -->
+            <div class="edit-tabs">
+                <button class="edit-tab-btn active" data-tab="markerTab">Marker</button>
+                <button class="edit-tab-btn" data-tab="gridTab">Grid</button>
+            </div>
+
+            <!-- MARKER TAB -->
+            <div id="markerTab" class="edit-tab-content active">
+                <div>Edit Marker</div>
+                <div id="markerFields">
+                    <div class="control-group">
+                        <label>Identifier</label>
+                        <input id="markerId" type="text" />
+                    </div>
+                    <div class="control-group">
+                        <label>Details</label>
+                        <textarea id="markerDetails" rows="2"></textarea>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:12px;">
+                        <div style="flex:1;">
+                            <label>Shape</label>
+                            <input type="hidden" id="markerShape" value="star" />
+                            <div class="shape-picker" id="markerShapePicker">
+                                <!-- Star -->
+                                <button class="shape-btn active" data-shape="star" title="Star">
+                                    <svg width="22" height="22" viewBox="-12 -12 24 24">
+                                        <path d="M0,-10 L2.3,-3.1 L9.5,-3.1 L3.8,1.2 L6.1,8.1 L0,4 L-6.1,8.1 L-3.8,1.2 L-9.5,-3.1 L-2.3,-3.1 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span>Star</span>
+                                </button>
+                                <!-- Circle -->
+                                <button class="shape-btn" data-shape="circle" title="Circle">
+                                    <svg width="22" height="22" viewBox="-12 -12 24 24">
+                                        <circle cx="0" cy="0" r="9" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                                    </svg>
+                                    <span>Circle</span>
+                                </button>
+                                <!-- Square -->
+                                <button class="shape-btn" data-shape="square" title="Square">
+                                    <svg width="22" height="22" viewBox="-12 -12 24 24">
+                                        <rect x="-8" y="-8" width="16" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                                    </svg>
+                                    <span>Square</span>
+                                </button>
+                                <!-- Triangle -->
+                                <button class="shape-btn" data-shape="triangle" title="Triangle">
+                                    <svg width="22" height="22" viewBox="-12 -12 24 24">
+                                        <polygon points="0,-10 8.66,5 -8.66,5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span>Triangle</span>
+                                </button>
+                                <!-- Question -->
+                                <button class="shape-btn" data-shape="question" title="Question">
+                                    <svg width="22" height="22" viewBox="-12 -12 24 24">
+                                        <text x="0" y="8" text-anchor="middle" font-size="19" font-weight="700" font-family="serif" fill="none" stroke="currentColor" stroke-width="1">?</text>
+                                    </svg>
+                                    <span>Unknown</span>
+                                </button>
+                                <!-- Planet -->
+                                <button class="shape-btn" data-shape="planet" title="Planet">
+                                    <svg width="22" height="22" viewBox="-12 -12 24 24">
+                                        <circle cx="0" cy="0" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                                        <ellipse cx="0" cy="0" rx="10" ry="3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5.5 4.5" transform="rotate(-24)"/>
+                                    </svg>
+                                    <span>Planet</span>
+                                </button>
+                                <!-- Ship -->
+                                <button class="shape-btn" data-shape="ship" title="Ship">
+                                    <svg width="22" height="22" viewBox="-12 -12 24 24">
+                                        <polygon points="0,-10 9.5,2.2 2.7,10 0,4.4 -2.7,10 -9.5,2.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                                    </svg>
+                                    <span>Ship</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="markerColorSection" style="flex:1;">
+                            <label>Color</label>
+                            <input type="hidden" id="markerColor" value="#ff3b3b" />
+                            <div id="markerColorSwatches">
+                                <button class="color-swatch active" data-color="#ff3b3b" style="background:#ff3b3b;" title="Red"></button>
+                                <button class="color-swatch" data-color="#ff8c00" style="background:#ff8c00;" title="Orange"></button>
+                                <button class="color-swatch" data-color="#ffd700" style="background:#ffd700;" title="Yellow"></button>
+                                <button class="color-swatch" data-color="#32cd32" style="background:#32cd32;" title="Lime"></button>
+                                <button class="color-swatch" data-color="#00ced1" style="background:#00ced1;" title="Cyan"></button>
+                                <button class="color-swatch" data-color="#1e90ff" style="background:#1e90ff;" title="Blue"></button>
+                                <button class="color-swatch" data-color="#9b30ff" style="background:#9b30ff;" title="Purple"></button>
+                                <button class="color-swatch" data-color="#ff1493" style="background:#ff1493;" title="Pink"></button>
+                                <button class="color-swatch" data-color="#00fa9a" style="background:#00fa9a;" title="Mint"></button>
+                                <button class="color-swatch" data-color="#ffffff" style="background:#ffffff;" title="White"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-danger" id="deleteMarker">Delete</button>
+                        <button class="btn btn-primary" id="saveMarker">Save</button>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-danger" id="clearAllMarkersBtn" style="flex: 1;">Clear All Markers</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GRID TAB -->
+            <div id="gridTab" class="edit-tab-content">
+                <div>Grid Configuration</div>
+
+                <!-- GRID TYPE -->
+                <div class="control-group">
+                    <label class="control-label">Grid Type</label>
+                    <select id="gridType">
+                        <option value="gridless">Gridless</option>
+                        <option value="square">Square</option>
+                        <option value="hexRowsOdd">Hexagonal Rows - Odd</option>
+                        <option value="hexRowsEven">Hexagonal Rows - Even</option>
+                        <option value="hexColsOdd">Hexagonal Columns - Odd</option>
+                        <option value="hexColsEven">Hexagonal Columns - Even</option>
+                    </select>
+                </div>
+
+                <!-- GRID DIMENSIONS -->
+                <div class="control-group">
+                    <label class="control-label">Grid Cell Size (Pixels)</label>
+                    <div style="display:flex;gap:8px;margin-top:4px;">
+                        <div style="flex:1;">
+                            <label style="font-size:11px;display:block;margin-bottom:2px;">Width</label>
+                            <input id="gridWidth" type="number" min="10" max="300" value="70" />
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:11px;display:block;margin-bottom:2px;">Height</label>
+                            <input id="gridHeight" type="number" min="10" max="300" value="70" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BACKGROUND IMAGE -->
+                <div class="control-group">
+                    <label class="control-label">Background Image</label>
+                    <input id="backgroundImageUpload" type="file" accept="image/*" />
+                </div>
+
+                <!-- SCENE DIMENSIONS -->
+                <div class="control-group">
+                    <label class="control-label">Scene Dimensions (Pixels)</label>
+                    <div style="display:flex;gap:8px;margin-top:4px;">
+                        <div style="flex:1;">
+                            <label style="font-size:11px;display:block;margin-bottom:2px;">Width</label>
+                            <input id="sceneWidth" type="number" value="1456" />
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:11px;display:block;margin-bottom:2px;">Height</label>
+                            <input id="sceneHeight" type="number" value="816" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OFFSET BACKGROUND -->
+                <div class="control-group">
+                    <label class="control-label">Offset Background (Pixels)</label>
+                    <div style="display:flex;gap:8px;margin-top:4px;">
+                        <div style="flex:1;">
+                            <label style="font-size:11px;display:block;margin-bottom:2px;">Horizontal</label>
+                            <input id="offsetBgHorizontal" type="number" value="0" />
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:11px;display:block;margin-bottom:2px;">Vertical</label>
+                            <input id="offsetBgVertical" type="number" value="0" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="spacer"></div>
+
+                <!-- GRID STYLE -->
+                <div class="control-group">
+                    <label class="control-label">Grid Style</label>
+                    <select id="gridStyle">
+                        <option value="solid">Solid Lines</option>
+                        <option value="dashed">Dashed Lines</option>
+                        <option value="dotted">Dotted Lines</option>
+                        <option value="squarePoints">Square Points</option>
+                        <option value="diamondPoints">Diamond Points</option>
+                        <option value="roundPoints">Round Points</option>
+                    </select>
+                </div>
+
+                <!-- GRID THICKNESS -->
+                <div class="control-group">
+                    <div class="control-row">
+                        <label>Grid Thickness</label>
+                        <input id="gridThickness" type="number" min="0.5" max="5" step="0.5" value="1" />
+                    </div>
+                </div>
+
+                <!-- GRID COLOR -->
+                <div class="control-group">
+                    <label class="control-label">Grid Color</label>
+                    <div style="display:flex;gap:6px;margin-top:4px;">
+                        <input id="gridColorPicker" type="color" value="#000000" />
+                        <input id="gridColorHex" type="text" placeholder="#000000" value="#000000" />
+                    </div>
+                </div>
+
+                <!-- GRID OPACITY -->
+                <div class="control-group">
+                    <label class="control-label">Grid Opacity</label>
+                    <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+                        <input id="gridOpacitySlider" type="range" min="0" max="1" step="0.05" value="0.1" />
+                        <input id="gridOpacityValue" type="number" min="0" max="1" step="0.05" value="0.1" />
+                    </div>
+                </div>
+
+                <div class="spacer"></div>
+
+                <!-- ADVANCED CONTROLS -->
+                <div class="control-group">
+                    <label class="control-label">View Controls</label>
+                    <div style="display:flex;gap:6px;margin-top:4px;">
+                        <button class="btn btn-secondary" id="resetView" style="flex:1;">Reset View</button>
+                        <button class="btn btn-secondary" id="calibrateGrid" style="flex:1;">Calibrate</button>
+                    </div>
+                </div>
+
+                <!-- MARKER IMPORT/EXPORT -->
+                <div class="control-group">
+                    <label class="control-label">Markers (JSON)</label>
+                    <div style="display:flex;gap:6px;margin-top:4px;margin-bottom:6px;">
+                        <button class="btn btn-primary" id="exportMarkers">Export</button>
+                        <button class="btn btn-primary" id="importMarkers">Import</button>
+                    </div>
+                    <textarea id="importExportArea" placeholder="Paste JSON here to import" rows="6"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div id="markerInfoPanel" style="display:none;">
+          <div class="info-panel-header">
+            <div class="info-panel-title">// MARKER DETAIL</div>
+            <button id="closeInfoPanel" class="info-panel-close">&times;</button>
+          </div>
+          <div id="infoPanelContent"></div>
+        </div>
+
+        <div class="tooltip" id="markerTooltip"></div>
+    </div>
+    <script src="HexMap.js"></script>
+</body>
+</html>
