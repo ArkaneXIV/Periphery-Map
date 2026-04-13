@@ -1,4 +1,10 @@
 (function () {
+    const SUPABASE_URL = 'https://bnxxvbpjyuvjuqdjsxaw.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_7Es2Dkzgh3iKMuFGpiyFgw_RubTfAt_';
+    const sb = (typeof supabase !== 'undefined')
+        ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+        : null;
+
     const canvasHex = document.getElementById('hexCanvas');
     const canvasMarkers = document.getElementById('markerCanvas');
     const ctxHex = canvasHex.getContext('2d');
@@ -1438,6 +1444,11 @@
         } catch (err) {
             showHudAlert('Import Failed', 'Invalid JSON.');
         }
+    }
+
+    async function hashString(str) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
     function saveState() {
