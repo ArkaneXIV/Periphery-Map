@@ -1356,8 +1356,8 @@
 
     function handlePointerMove(e) {
         if (isPanning) {
-            state.gridPan.x += e.movementX;
-            state.gridPan.y += e.movementY;
+            state.gridPan.x -= e.movementX;
+            state.gridPan.y -= e.movementY;
             updateImageTransform();
             render();
             return;
