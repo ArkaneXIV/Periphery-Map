@@ -1118,6 +1118,40 @@
             max-height: 50vh;
             overflow-y: auto;
           }
+
+          /* --- sideMenu: expand to near-full width --- */
+          #sideMenu {
+            width: calc(100vw - 20px);
+          }
+
+          /* --- Minimap: hide by default on mobile --- */
+          #minimapWrap {
+            display: none !important;
+          }
+          #minimapWrap.visible {
+            display: flex !important;
+            /* Reposition above bottom sheets */
+            bottom: auto;
+            top: 58px;
+            left: 10px;
+          }
+
+          /* --- Touch targets: 44px minimum --- */
+          .menu-btn {
+            min-height: 44px;
+          }
+          .edit-tab-btn {
+            min-height: 44px;
+          }
+          .shape-btn {
+            min-height: 44px;
+          }
+          .color-swatch {
+            min-height: 44px;
+          }
+          .btn {
+            min-height: 44px;
+          }
         }
     </style>
 </head>
