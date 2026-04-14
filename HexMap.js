@@ -1310,7 +1310,6 @@
         if (e.button === 1) {
             // Middle mouse pan
             isPanning = true;
-            panStart = { x: e.clientX, y: e.clientY };
             canvasMarkers.style.cursor = 'grabbing';
             if (e.pointerId) canvasMarkers.setPointerCapture(e.pointerId);
             e.preventDefault();
@@ -1357,11 +1356,8 @@
 
     function handlePointerMove(e) {
         if (isPanning) {
-            const dx = e.clientX - panStart.x;
-            const dy = e.clientY - panStart.y;
-            panStart = { x: e.clientX, y: e.clientY };
-            state.gridPan.x += dx;
-            state.gridPan.y += dy;
+            state.gridPan.x += e.movementX;
+            state.gridPan.y += e.movementY;
             updateImageTransform();
             render();
             return;
