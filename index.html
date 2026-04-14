@@ -1070,6 +1070,54 @@
           0%, 100% { transform: scale(1); opacity: 0.9; }
           50%      { transform: scale(1.4); opacity: 0.4; }
         }
+
+        /* =============================================
+           MOBILE — max-width: 480px
+           ============================================= */
+        @media (max-width: 480px) {
+
+          /* --- Bottom sheet shared base --- */
+          #editPanel,
+          #markerInfoPanel {
+            /* Override desktop absolute positioning */
+            position: fixed;
+            top: auto;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            box-sizing: border-box;
+
+            /* Remove desktop chamfer (looks wrong on full-width sheet) */
+            clip-path: none;
+            border-left: none;
+            border-right: none;
+            border-bottom: none;
+            border-top: 1px solid var(--amber-dim);
+
+            /* Slide-up animation */
+            display: block;                      /* Always in DOM flow on mobile */
+            transform: translateY(100%);         /* Hidden: off-screen below */
+            transition: transform 0.25s ease;
+          }
+
+          #editPanel.panel-visible,
+          #markerInfoPanel.panel-visible {
+            transform: translateY(0);            /* Visible: slide up into view */
+          }
+
+          /* editPanel height */
+          #editPanel {
+            max-height: 70vh;
+            overflow-y: auto;
+          }
+
+          /* markerInfoPanel height + scroll */
+          #markerInfoPanel {
+            max-height: 50vh;
+            overflow-y: auto;
+          }
+        }
     </style>
 </head>
 <body>
