@@ -914,11 +914,11 @@
     function openEditPanelFor(marker) {
         selectedMarker = marker;
         if (!isEditMode) {
-            editPanel.style.display = 'none';
+            editPanel.classList.remove('panel-visible');
             return;
         }
 
-        editPanel.style.display = 'block';
+        editPanel.classList.add('panel-visible');
         const markerFields = document.getElementById('markerFields');
         
         if (!marker) {
@@ -1153,7 +1153,7 @@
             });
         }
 
-        markerInfoPanel.style.display = 'block';
+        markerInfoPanel.classList.add('panel-visible');
     }
 
     function showMarkerInfo(marker) {
@@ -1161,7 +1161,7 @@
     }
 
     function hideMarkerInfo() {
-        markerInfoPanel.style.display = 'none';
+        markerInfoPanel.classList.remove('panel-visible');
     }
 
     function toggleMode() {
@@ -1180,7 +1180,7 @@
         isEditMode = false;
         updateViewportHud({ editMode: false });
         document.getElementById('modeToggleLabel').textContent = 'Switch to Edit Mode';
-        editPanel.style.display = 'none';
+        editPanel.classList.remove('panel-visible');
         isCalibrating = false;
         pendingMarker = null;
         tooltip.style.display = 'none';
@@ -1224,7 +1224,7 @@
         isEditMode = true;
         updateViewportHud({ editMode: true });
         document.getElementById('modeToggleLabel').textContent = 'Switch to View Mode';
-        editPanel.style.display = 'block';
+        editPanel.classList.add('panel-visible');
         hideMarkerInfo();
         openEditPanelFor(selectedMarker);
         tooltip.style.display = 'none';
