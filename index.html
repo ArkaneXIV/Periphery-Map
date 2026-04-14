@@ -929,6 +929,16 @@
         #editPanel::-webkit-scrollbar-thumb { background: var(--amber-dim); }
         #editPanel::-webkit-scrollbar-thumb:hover { background: var(--amber); }
 
+        /* Class-based visibility (replaces inline style="display:none") */
+        #editPanel,
+        #markerInfoPanel {
+          display: none;
+        }
+        #editPanel.panel-visible,
+        #markerInfoPanel.panel-visible {
+          display: block;
+        }
+
         /* === Radar minimap === */
         #minimapWrap {
           position: absolute;
@@ -1178,7 +1188,7 @@
           </div>
         </div>
 
-        <div id="editPanel" style="display:none;">
+        <div id="editPanel">
             
             <!-- TABS -->
             <div class="edit-tabs">
@@ -1426,7 +1436,7 @@
             </div>
         </div>
 
-        <div id="markerInfoPanel" style="display:none;">
+        <div id="markerInfoPanel">
           <div class="info-panel-header">
             <div class="info-panel-title">// MARKER DETAIL</div>
             <button id="closeInfoPanel" class="info-panel-close">&times;</button>
