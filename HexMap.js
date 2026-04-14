@@ -1140,11 +1140,6 @@
                 }
                 row.appendChild(name);
 
-                const shapeLabel = document.createElement('span');
-                shapeLabel.className = 'marker-shape';
-                shapeLabel.textContent = marker.shape;
-                row.appendChild(shapeLabel);
-
                 entry.appendChild(row);
 
                 if (marker.details) {
